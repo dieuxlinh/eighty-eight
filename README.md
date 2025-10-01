@@ -23,7 +23,7 @@ A real-time audio visualiser built with **Svelte**, using the microphone to dete
 
 ---
 
-## 📸 Preview
+## Preview
 
 ![Image of the Eighty Eight up and running](assets/screenshot.png)
 ![From real time](assets/piano.png)
