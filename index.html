@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>eighty eight</title>
+    <!-- p5.js for visuals -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <!-- Meyda for audio features -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/meyda/5.6.2/meyda.min.js"></script>
+  </head>
+  <body>
+    <script>
+      let audioContext, source, analyzer;
+      let isReady = false;
+      let soundDetected = false; 
+
+      function setup() {
+        createCanvas(windowWidth, windowHeight);
+        background(0);
+        drawStartMessage();
+      }
+
+      function drawStartMessage() {
+        background(0);
+        textAlign(CENTER, CENTER);
+        fill(200);
+        textSize(24);
+        text("Click to start & allow mic", width / 2, height / 2);
+      }
+
+      async function mousePressed() {
+        if (!isReady) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          source = audioContext.createMediaStreamSource(stream);
+
+          analyzer = Meyda.createMeydaAnalyzer({
+            audioContext: audioContext,
+            source: source,
+            bufferSize: 512,
+            featureExtractors: ["rms"],
+          });
+
+          analyzer.start();
+          isReady = true;
+
+          //background(255); // clear start text
+        }
+      }
+
+      function draw() {
+            if (!isReady) {
+                // Before click: show start text
+                drawStartMessage();
+                return; // skip rest of draw
+            }
+
+            if (isReady && analyzer) {
+                let features = analyzer.get();
+                if (features && features.rms > 0.01) {
+                soundDetected = true;
+                }
+
+                if (soundDetected) {
+                let intensity = map(features.rms, 0, 0.05, 0, 255);
+                background(intensity, 0, 0); // full-screen red based on volume
+                } else {
+                background(255); // screen white after click, before sound
+                }
+            }
+        }
+    </script>
+  </body>
+</html>

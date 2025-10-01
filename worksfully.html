@@ -1,0 +1,165 @@
+<script>
+  import { onMount } from "svelte";
+  import { PitchDetector } from "pitchy";
+
+  let isReady = false;
+  let canvas, ctx;
+  let audioContext, source, analyserNode;
+  let buffer = new Float32Array(2048);
+  let circles = [];
+  let lastNote = null; // store last detected note
+
+  const noteColors = {
+    "C": { r: 255, g: 0, b: 0 },
+    "D": { r: 0, g: 0, b: 255 },
+    "E": { r: 255, g: 165, b: 0 },
+    "F": { r: 0, g: 128, b: 0 },
+    "G": { r: 255, g: 255, b: 0 },
+    "A": { r: 128, g: 0, b: 128 },
+    "B": { r: 255, g: 192, b: 203 },
+  };
+
+      const noteColors = {
+    "C": { r: 255, g: 179, b: 179 },  // pastel red
+    "D": { r: 179, g: 179, b: 255 },  // pastel blue
+    "E": { r: 255, g: 214, b: 179 },  // pastel orange
+    "F": { r: 179, g: 223, b: 179 },  // pastel green
+    "G": { r: 255, g: 255, b: 179 },  // pastel yellow
+    "A": { r: 223, g: 179, b: 223 },  // pastel purple
+    "B": { r: 255, g: 223, b: 230 },  // pastel pink
+    };
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+  function frequencyToMidi(freq) {
+    return Math.round(12 * Math.log2(freq / 440) + 69);
+  }
+
+  function midiToNoteName(midi) {
+    return noteNames[midi % 12];
+  }
+
+  function addCircle(color) {
+    circles.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      r: 150, // fixed radius
+      color,
+      created: performance.now()
+    });
+  }
+
+  onMount(() => {
+    ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    function startMic() {
+      if (!isReady) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext.resume().then(async () => {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          source = audioContext.createMediaStreamSource(stream);
+
+          analyserNode = audioContext.createAnalyser();
+          analyserNode.fftSize = buffer.length * 2;
+          source.connect(analyserNode);
+
+          isReady = true; // hide text
+          requestAnimationFrame(updateAudio);
+        });
+      }
+    }
+
+    function updateAudio() {
+      if (!analyserNode) return;
+      analyserNode.getFloatTimeDomainData(buffer);
+
+      const pitchDetector = PitchDetector.forFloat32Array(buffer.length);
+      const [frequency, clarity] = pitchDetector.findPitch(buffer, audioContext.sampleRate);
+
+      if (frequency && clarity > 0.8) {
+        const midi = frequencyToMidi(frequency);
+        const note = midiToNoteName(midi);
+
+        if (note !== lastNote) { // only generate circle if it's a new note
+          const color = noteColors[note] || { r: 255, g: 255, b: 255 };
+          addCircle(color);
+          lastNote = note;
+        }
+      } else {
+        lastNote = null; // reset if no note detected
+      }
+
+      requestAnimationFrame(updateAudio);
+    }
+
+    function updateCircles() {
+      const now = performance.now();
+      circles = circles.filter(c => now - c.created < 4000);
+      requestAnimationFrame(updateCircles);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const now = performance.now();
+      for (let c of circles) {
+        const age = now - c.created;
+        const t = Math.min(age / 4000, 1);
+        const alpha = 1 - t;
+
+        const gradient = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r);
+        gradient.addColorStop(0, `rgba(${c.color.r},${c.color.g},${c.color.b},${alpha})`);
+        gradient.addColorStop(1, `rgba(${c.color.r},${c.color.g},${c.color.b},0)`);
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+    requestAnimationFrame(updateCircles);
+
+    window.startMic = startMic;
+  });
+</script>
+
+<style>
+  canvas {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+  }
+  .screen {
+    width: 100vw;
+    height: 100vh;
+    cursor: pointer;
+    user-select: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+    color: #ccc;
+  }
+</style>
+
+<div class="screen" on:click={() => window.startMic?.()}>
+  {#if !isReady}
+    Click to start & allow mic
+  {/if}
+</div>
+
+<canvas bind:this={canvas}></canvas>

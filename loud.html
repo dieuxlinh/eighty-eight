@@ -1,0 +1,110 @@
+<script>
+  import Meyda from "meyda";
+
+  let isReady = false;
+  let displayColor = { r: 255, g: 255, b: 255 }; // start white
+
+  let audioContext;
+  let source;
+  let analyzer;
+
+  const noteColors = {
+    "C": { r: 255, g: 0, b: 0 },
+    "D": { r: 0, g: 0, b: 255 },
+    "E": { r: 255, g: 165, b: 0 },
+    "F": { r: 0, g: 128, b: 0 },
+    "G": { r: 255, g: 255, b: 0 },
+    "A": { r: 128, g: 0, b: 128 },
+    "B": { r: 255, g: 192, b: 203 },
+  };
+
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+  // Convert frequency to MIDI note
+  function frequencyToMidi(freq) {
+    return Math.round(12 * Math.log2(freq / 440) + 69);
+  }
+
+  function midiToNoteName(midi) {
+    return noteNames[midi % 12];
+  }
+
+  function getNoteColor(freq) {
+    if (!freq || freq <= 0) return displayColor; // keep last color
+    const midi = frequencyToMidi(freq);
+    const note = midiToNoteName(midi);
+    return noteColors[note] || displayColor;
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  async function startMic() {
+    if (!isReady) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      source = audioContext.createMediaStreamSource(stream);
+
+      analyzer = Meyda.createMeydaAnalyzer({
+        audioContext,
+        source,
+        bufferSize: 2048,
+        featureExtractors: ["rms", "spectralCentroid"],
+      });
+
+      analyzer.start();
+      isReady = true;
+
+      requestAnimationFrame(updateAudio);
+    }
+  }
+
+  function updateAudio() {
+    if (analyzer) {
+      const features = analyzer.get();
+      if (features) {
+        const rms = features.rms || 0;
+        const centroid = features.spectralCentroid || 0;
+
+        // Map spectral centroid to frequency approximation
+        let approxFreq = centroid > 0 ? centroid : 440; // fallback 440 Hz
+
+        // Only apply color if volume is significant
+        if (rms > 0.01) {
+          const targetColor = getNoteColor(approxFreq);
+          displayColor.r = lerp(displayColor.r, targetColor.r, 0.1);
+          displayColor.g = lerp(displayColor.g, targetColor.g, 0.1);
+          displayColor.b = lerp(displayColor.b, targetColor.b, 0.1);
+        }
+      }
+    }
+    requestAnimationFrame(updateAudio);
+  }
+
+  $: backgroundColor = `rgb(${Math.round(displayColor.r)}, ${Math.round(displayColor.g)}, ${Math.round(displayColor.b)})`;
+</script>
+
+<style>
+  .screen {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #ccc;
+    font-size: 2rem;
+    user-select: none;
+    cursor: pointer;
+  }
+</style>
+
+<div
+  class="screen"
+  style="background-color: {backgroundColor}"
+  on:click={startMic}
+>
+  {#if !isReady}
+    Click to start & allow mic
+  {/if}
+</div>

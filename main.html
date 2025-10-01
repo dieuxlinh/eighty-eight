@@ -1,0 +1,82 @@
+<script>
+  import Meyda from "meyda";
+
+  let isReady = false;          // True after user clicks
+  let soundDetected = false;    // True once sound is detected
+  let rms = 0;                  // Current RMS volume
+  let displayRed = 0;           // Smooth red intensity for pulsing effect
+
+  let audioContext;
+  let source;
+  let analyzer;
+
+  // Start microphone and analyzer
+  async function startMic() {
+    if (!isReady) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      source = audioContext.createMediaStreamSource(stream);
+
+      analyzer = Meyda.createMeydaAnalyzer({
+        audioContext,
+        source,
+        bufferSize: 512,
+        featureExtractors: ["rms"],
+      });
+
+      analyzer.start();
+      isReady = true;
+
+      requestAnimationFrame(updateAudio);
+    }
+  }
+
+  // Update RMS and soundDetected
+  function updateAudio() {
+    if (analyzer) {
+      const features = analyzer.get();
+      if (features) {
+        rms = features.rms;
+        soundDetected = rms > 0.01;
+      }
+    }
+
+    // Smooth red intensity for pulsing effect
+    if (soundDetected) {
+      displayRed = Math.min((rms / 0.05) * 255, 255);
+    } else {
+      displayRed = displayRed * 0.95; // decay gradually
+    }
+
+    requestAnimationFrame(updateAudio);
+  }
+
+  // Reactive background color
+  $: backgroundColor = !isReady
+    ? "black"
+    : `rgb(${displayRed},0,0)`;
+</script>
+
+<style>
+  .screen {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #ccc;
+    font-size: 2rem;
+    user-select: none;
+    cursor: pointer;
+  }
+</style>
+
+<div
+  class="screen"
+  style="background-color: {backgroundColor}"
+  on:click={startMic}
+>
+  {#if !isReady}
+    Click to start & allow mic
+  {/if}
+</div>
