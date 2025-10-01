@@ -33,7 +33,7 @@ A real-time audio visualiser built with **Svelte**, using the microphone to dete
 ## Setup
 
 ```bash
-git clone https://github.com/your-username/svelte-mic-visualizer.git
-cd svelte-mic-visualizer
+git clone https://github.com/your-username/eighty-eight.git
+cd eighty-eight
 npm install
 npm run dev
